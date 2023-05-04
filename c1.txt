@@ -1,0 +1,74 @@
+Ejercicio 1. ¿Cómo se puede obtener, a través de SNMP, la misma información que nos
+proporciona el comando # uname -a?
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.1.1.0 (sysDescr)
+
+Ejercicio 2. ¿Cómo se puede obtener, a través de SNMP, la misma información que nos
+proporciona el comando # ifconfig?
+Para obtener toda la información del comando son necesarios varios OID, por ejemplo:
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.2.1 (ifDescr)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.4.1 (ifMtu)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.6.1 (ifPhysAddress)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.4.20.1.1.172.19.151.193 (ipAdEntAddr)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.4.20.1.3.172.19.151.193 (ipAdEntNetMask)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.10.1 (ifInOctects)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.11.1 (ifInUcastPkts)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.14.1 (ifInErrors)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.16.1 (ifOutOctects)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.17.1 (ifOutUCastPkts)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.20.1 (ifOutErrors)
+Los datos obtenidos corresponden a la tabla ipAddrTable para obtener información de IPs y la tabla
+ifTable, por lo que podríamos hacer un snmpwalk de ambos y juntar la información de ambos.
+
+Ejercicio 3. ¿De qué formas se pueden obtener, a través de SNMP, las direcciones física y lógica de
+un host?
+Debemos conseguir información de varias tablas: ifTable para direcciones físicas y ipAddrTable
+para las lógicas. Podemos usar los OID ipAdEntAddr y ifIndex para comprobar que los índices son
+iguales y corresponden a la misma interfaz. Por ejemplo, para el host del índice 1:
+snmpgetnext -v1 -c public <ip> 1.3.6.1.2.1.4.20.1.1 (ipAdEntAddr)
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.2.2.1.6.1 (ifPhysAddress)
+Si se quisiese obtener otro host, sería necesario realizar snmpgetnext hasta obtener los valores que
+necesitemos (también se podría con snmpget pero para ello se debe conocer precisamente el dato
+que estamos buscando) o snmpwalk.
+
+Ejercicio 4. ¿Cómo se puede obtener, a través de SNMP, la máscara de red de un host?
+Debemos conocer la IP del host primero. Por ejemplo, si la IP es 172.19.151.193:
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.4.20.1.3.172.19.151.193 (ipAdEntNetMask)
+2
+
+Ejercicio 5. ¿Cómo se puede obtener, a través de SNMP, la misma información que nos
+proporciona el comando # netstat -r?
+Podemos realizar un snmpwalk a la tabla ipRouteTable:
+snmpwalk -v1 -c public <ip> 1.3.6.1.2.1.4.21 (ipRouteTable)
+
+Ejercicio 6. ¿Cómo se puede obtener, a través de SNMP, la pasarela de red de un host?
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.4.21.1.7.0.0.0.0 (ipRouteNextHop)
+
+Ejercicio 7. ¿Cómo se puede obtener, a través de SNMP, la dirección de la red a la que pertenece un
+host?
+Podemos obtener datos que ya hemos aprendido a obtener antes como la dirección IP y la máscara
+de red con la tabla ipAddrTable y realizar la operación AND para obtener la dirección de red.
+
+Ejercicio 8. ¿Cómo se puede determinar, mediante SNMP, la carga de CPU de un host?
+Este ejercicio y el siguiente se obtienen los datos de OIDs de la HOST-RESOURCES-MIB:
+snmpwalk -v1 -c public <ip> 1.3.6.1.2.1.25.3.3 (hrProcessorTable)
+
+Ejercicio 9. ¿Cómo se puede determinar, mediante SNMP, la memoria principal en uso de un host?
+La tabla utilizada en mi caso tiene la memoria principal en la primera fila (esto se puede comprobar
+con la columna hrStorageType y hrStorageDescr y se utiliza el índice hrStorageIndex para
+indexar):
+snmpget -v1 -c public <ip> 1.3.6.1.2.1.25.2.3.1.6.1 (hrStorageUsed)
+
+Ejercicio 10. ¿Cómo se puede obtener, mediante SNMP, la utilización de su interfaz de red?
+Esta es una cuestión estadística.
+Necesitamos la velocidad (bits/s) y los datos entrados y salidos (ifInOctets y ifOutOctets). Por
+ejemplo, si queremos los de la primera interfaz (índice = 1):
+snmpget -v1 -c public <ip> .1.3.6.1.2.1.2.2.1.10.1 (ifInOctets)
+snmpget -v1 -c public <ip> .1.3.6.1.2.1.2.2.1.16.1 (ifOutOctets)
+snmpget -v1 -c public <ip> .1.3.6.1.2.1.2.2.1.5.1 (ifSpeed)
+Como ifInOctets y ifOutOctets son “counters”, pueden darse la vuelta y debemos asegurarnos de
+que esto ocurra midiendo en dos instantes de tiempo (Δt=t2-t1; t2>t1).
+Debemos tener en cuenta si es half-duplex (sumamos ambos datos) o si es full-duplex (podemos
+sumarlas o cogemos el máximo si podemos despreciar uno de ellos).
+La fórmula que utilizaremos es la siguiente:
+U=((ΔifInOctets+ΔifOutOctets)*8*100) / ((nsegundosΔ)*ifSpeed)
+El resultado será el porcentaje de utilización de una interfaz de red.
